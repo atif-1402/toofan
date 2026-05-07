@@ -25,6 +25,7 @@ func (m model) handleResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "tab":
 		m.duration = nextDur(m.duration)
+		m.activeRace = nil
 		m.save()
 	case "ctrl+t":
 		theme.Next()
@@ -42,6 +43,9 @@ func (m model) handleResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
+	if m.activeRace != nil {
+		m.game.SetText(m.activeRace.Text)
+	}
 	m.showingErrors = false
 	m.active = screenTyping
 	return m, nil
@@ -120,6 +124,9 @@ func (m model) viewResults(p theme.Palette) string {
 		out = append(out, pb)
 	} else if m.pb > 0 {
 		out = append(out, dim.Render(fmt.Sprintf("pb %.0f", m.pb)))
+	}
+	if m.activeRace != nil {
+		out = append(out, dim.Render(fmt.Sprintf("old race wpm %.0f", m.activeRace.Stats.WPM)))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Center, out...)
