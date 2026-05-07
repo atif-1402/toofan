@@ -2,6 +2,7 @@ package game
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,18 @@ import (
 )
 
 var dataDir string
+
+type RaceRecord struct {
+	ID         string      `json:"id"`
+	At         string      `json:"at"`
+	Duration   int         `json:"duration"`
+	Mode       string      `json:"mode"`
+	Language   string      `json:"language"`
+	Difficulty string      `json:"difficulty"`
+	Text       string      `json:"text"`
+	Stats      Stats       `json:"stats"`
+	Points     []RacePoint `json:"points"`
+}
 
 func init() {
 	configDir, _ := os.UserConfigDir()
@@ -98,6 +111,47 @@ func SavePB(duration int, mode string, wpm float64) {
 	for k, val := range pbs {
 		fmt.Fprintf(f, "%s=%.0f\n", k, val)
 	}
+}
+
+func SaveRace(r RaceRecord) {
+	os.MkdirAll(dataDir, 0755)
+	f, err := os.OpenFile(
+		filepath.Join(dataDir, "races.txt"),
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644,
+	)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	b, err := json.Marshal(r)
+	if err != nil {
+		return
+	}
+	_, _ = fmt.Fprintln(f, string(b))
+}
+
+func LoadRaces() []RaceRecord {
+	path := filepath.Join(dataDir, "races.txt")
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	var out []RaceRecord
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var r RaceRecord
+		if err := json.Unmarshal([]byte(scanner.Text()), &r); err != nil {
+			continue
+		}
+		if r.Text == "" || len(r.Points) == 0 {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func LoadConfig() (duration int, mode string, language string, difficulty string, themeName string) {
