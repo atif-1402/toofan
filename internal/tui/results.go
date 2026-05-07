@@ -110,6 +110,12 @@ func (m model) viewResults(p theme.Palette) string {
 		statBlock("typos", errStr),
 		statBlock("time", val.Render(timeStr)),
 	)
+	if m.activeRace != nil {
+		stats = lipgloss.JoinHorizontal(lipgloss.Top,
+			stats,
+			statBlock("old wpm", dim.Render(fmt.Sprintf("%.0f", m.activeRace.Stats.WPM))),
+		)
+	}
 
 	var out []string
 	out = append(out, "", stats, "", "")
@@ -125,10 +131,6 @@ func (m model) viewResults(p theme.Palette) string {
 	} else if m.pb > 0 {
 		out = append(out, dim.Render(fmt.Sprintf("pb %.0f", m.pb)))
 	}
-	if m.activeRace != nil {
-		out = append(out, dim.Render(fmt.Sprintf("old race wpm %.0f", m.activeRace.Stats.WPM)))
-	}
-
 	return lipgloss.JoinVertical(lipgloss.Center, out...)
 }
 
