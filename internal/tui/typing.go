@@ -75,9 +75,6 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "ctrl+t":
-		if m.game.Started() {
-			m.game.Reset(m.mode, m.lang, m.difficulty)
-		}
 		m.pickingTheme = true
 		m.themeCur = 0
 		for i, t := range theme.All {
@@ -164,9 +161,6 @@ func (m model) viewTyping(p theme.Palette) string {
 	ghostPos := -1
 	if m.activeRace != nil && m.game.Started() {
 		ghostPos = ghostLenAt(m.activeRace.Points, int(m.game.Elapsed().Milliseconds()))
-		if ghostPos < len(m.game.Input()) {
-			ghostPos = -1
-		}
 	}
 
 	// word mode: 3 lines (monkeytype style), code mode: 7 lines (full snippet)
@@ -197,9 +191,7 @@ func (m model) viewTyping(p theme.Palette) string {
 		} else {
 			topLine = hi.Render(fmt.Sprintf("%d", timeLeft))
 		}
-		if m.activeRace != nil {
-			topLine += dim.Render(fmt.Sprintf("   old %.0f wpm", m.activeRace.Stats.WPM))
-		}
+
 	} else {
 		if m.duration == 0 {
 			topLine = hi.Render("∞")
