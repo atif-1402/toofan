@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -24,10 +25,14 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "tab":
-		m.game.Reset(m.mode, m.lang, m.difficulty)
+		m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
+		if m.activeRace != nil {
+			m.game.SetText(m.activeRace.Text)
+		}
 
 	case "ctrl+d":
 		if m.mode == "words" {
+			m.activeRace = nil
 			m.pickingDifficulty = true
 			m.diffCur = 0
 			for i, d := range difficulties {
@@ -40,6 +45,7 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+w":
 		if !m.game.Started() {
+			m.activeRace = nil
 			if m.mode == "words" {
 				m.mode = "code"
 			} else {
@@ -51,6 +57,7 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+l":
 		if m.mode == "code" && !m.game.Started() {
+			m.activeRace = nil
 			m.pickingLang = true
 			m.langCur = 0
 			for i, name := range lang.Names {
@@ -62,14 +69,12 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+o":
 		if m.mode == "code" && !m.game.Started() {
+			m.activeRace = nil
 			m.pickingLesson = true
 			m.lessonCur = 0
 		}
 
 	case "ctrl+t":
-		if m.game.Started() {
-			m.game.Reset(m.mode, m.lang, m.difficulty)
-		}
 		m.pickingTheme = true
 		m.themeCur = 0
 		for i, t := range theme.All {
@@ -95,6 +100,18 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.game.Started() {
 			m.prof = loadProfile()
 			m.active = screenProfile
+			return m, nil
+		}
+	case "ctrl+g":
+		if !m.game.Started() {
+			m.races = game.LoadRaces()
+			if len(m.races) == 0 {
+				m.message = "no saved races yet"
+				m.msgTime = time.Now()
+				return m, nil
+			}
+			m.raceCur = 0
+			m.pickingRace = true
 			return m, nil
 		}
 
@@ -141,6 +158,10 @@ func (m model) viewTyping(p theme.Palette) string {
 
 	lines := splitLines(m.game.Text(), textWidth, m.game.CodeMode)
 	curLine := cursorLine(lines, len(m.game.Input()))
+	ghostPos := -1
+	if m.activeRace != nil && m.game.Started() {
+		ghostPos = ghostLenAt(m.activeRace.Points, int(m.game.Elapsed().Milliseconds()))
+	}
 
 	// word mode: 3 lines (monkeytype style), code mode: 7 lines (full snippet)
 	visible := 3
@@ -158,7 +179,7 @@ func (m model) viewTyping(p theme.Palette) string {
 
 	text := lipgloss.NewStyle().
 		Padding(0, 2).
-		Render(colorText(m.game, p, lines, top, bot))
+		Render(colorText(m.game, p, lines, top, bot, ghostPos))
 
 	// timer at top
 	var topLine string
@@ -170,6 +191,7 @@ func (m model) viewTyping(p theme.Palette) string {
 		} else {
 			topLine = hi.Render(fmt.Sprintf("%d", timeLeft))
 		}
+
 	} else {
 		if m.duration == 0 {
 			topLine = hi.Render("∞")
@@ -214,7 +236,11 @@ func (m model) viewTyping(p theme.Palette) string {
 		} else {
 			modeLabel = "words"
 		}
-		info := dim.Render(modeLabel + " · ? help")
+		infoStr := modeLabel + " · ? help"
+		if m.activeRace != nil {
+			infoStr += fmt.Sprintf(" · old %.0f", m.activeRace.Stats.WPM)
+		}
+		info := dim.Render(infoStr)
 		out = append(out, "", info)
 	}
 
@@ -237,6 +263,7 @@ func (m model) viewHelp(p theme.Palette) string {
 		val.Render("ctrl+t") + dim.Render("    change theme"),
 		val.Render("ctrl+p") + dim.Render("    open profile"),
 		val.Render("ctrl+d") + dim.Render("    change difficulty (words mode only)"),
+		val.Render("ctrl+g") + dim.Render("    race against previous run"),
 		val.Render("tab") + dim.Render("       restart test"),
 		val.Render("esc") + dim.Render("       configure duration"),
 		val.Render("e") + dim.Render("         view error words (results screen)"),
@@ -246,4 +273,18 @@ func (m model) viewHelp(p theme.Palette) string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func ghostLenAt(points []game.RacePoint, elapsedMS int) int {
+	if len(points) == 0 {
+		return 0
+	}
+	out := 0
+	for _, p := range points {
+		if p.MS > elapsedMS {
+			break
+		}
+		out = p.Len
+	}
+	return out
 }

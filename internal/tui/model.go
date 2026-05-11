@@ -22,26 +22,26 @@ const (
 )
 
 type model struct {
-	active   screen
-	game     *game.Game
-	duration int
-	mode     string // "words" or "code"
-	lang     string
+	active     screen
+	game       *game.Game
+	duration   int
+	mode       string // "words" or "code"
+	lang       string
 	difficulty string
 
 	width, height int
 
-	pickingDur    bool
-	durCur        int
-	pickingLang   bool
-	langCur       int
-	pickingLesson bool
-	lessonCur     int
-	pickingTheme  bool
-	themeCur      int
+	pickingDur        bool
+	durCur            int
+	pickingLang       bool
+	langCur           int
+	pickingLesson     bool
+	lessonCur         int
+	pickingTheme      bool
+	themeCur          int
 	pickingDifficulty bool
 	diffCur           int
-	showHelp      bool
+	showHelp          bool
 
 	result        game.Stats
 	pb            float64
@@ -57,6 +57,11 @@ type model struct {
 	pickingRestore bool
 	backups        []string
 	restoreCur     int
+
+	pickingRace bool
+	raceCur     int
+	races       []game.RaceRecord
+	activeRace  *game.RaceRecord
 }
 
 func New() model {
@@ -64,10 +69,10 @@ func New() model {
 	theme.Current = theme.ByName(th)
 
 	return model{
-		game:     game.New(duration, mode, language, difficulty),
-		duration: duration,
-		mode:     mode,
-		lang:     language,
+		game:       game.New(duration, mode, language, difficulty),
+		duration:   duration,
+		mode:       mode,
+		lang:       language,
 		difficulty: difficulty,
 	}
 }
@@ -75,7 +80,7 @@ func New() model {
 type tick time.Time
 
 func (m model) isPaused() bool {
-	return m.pickingDur || m.pickingLang || m.pickingLesson || m.pickingTheme || m.showHelp
+	return m.pickingDur || m.pickingLang || m.pickingLesson || m.pickingTheme || m.showHelp || m.pickingRace
 }
 
 func (m model) Init() tea.Cmd {
@@ -107,6 +112,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						durToSave = m.game.TimeLeft()
 					}
 					game.SaveResult(m.result, durToSave, m.mode, m.lang)
+					game.SaveRace(game.RaceRecord{
+						ID:         time.Now().Format("20060102150405.000000000"),
+						At:         time.Now().Format("2006-01-02 15:04"),
+						Duration:   durToSave,
+						Mode:       m.mode,
+						Language:   m.lang,
+						Difficulty: m.difficulty,
+						Text:       m.game.Text(),
+						Stats:      m.result,
+						Points:     m.game.RaceTrack(),
+					})
+
 					if m.gotNewPB {
 						game.SavePB(m.duration, m.mode, m.result.WPM)
 					}
@@ -147,6 +164,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pickingRestore = false
 			}
 			return m, nil
+		}
+		if m.pickingRace {
+			return m.handleRacePicker(msg)
 		}
 
 		switch msg.String() {
@@ -189,6 +209,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				m.duration = durations[m.durCur]
 				m.pickingDur = false
+				m.activeRace = nil
 				m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
 				m.save()
 				return m, nil
@@ -215,6 +236,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				m.difficulty = difficulties[m.diffCur]
 				m.pickingDifficulty = false
+				m.activeRace = nil
 				m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
 				m.save()
 				return m, nil
@@ -262,6 +284,8 @@ func (m model) View() string {
 			names = append(names, filepath.Base(f))
 		}
 		body = renderList(p, "restore backup", names, nil, m.restoreCur)
+	} else if m.pickingRace {
+		body = m.viewRacePicker(p)
 	} else {
 		switch m.active {
 		case screenTyping:

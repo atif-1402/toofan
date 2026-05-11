@@ -40,6 +40,11 @@ func (m model) handleResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.durCur = i
 			}
 		}
+		m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
+		if m.activeRace != nil {
+			m.game.SetText(m.activeRace.Text)
+		}
+		m.showingErrors = false
 		m.active = screenTyping
 		return m, nil
 	}
@@ -50,6 +55,9 @@ func (m model) handleResults(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
+	if m.activeRace != nil {
+		m.game.SetText(m.activeRace.Text)
+	}
 	m.showingErrors = false
 	m.active = screenTyping
 	return m, nil
@@ -107,13 +115,19 @@ func (m model) viewResults(p theme.Palette) string {
 		)
 	}
 
-	stats := lipgloss.JoinHorizontal(lipgloss.Top,
+	blocks := []string{
 		statBlock("wpm", hi.Render(fmt.Sprintf("%.0f", r.WPM))),
+	}
+	if m.activeRace != nil {
+		blocks = append(blocks, statBlock("old wpm", val.Render(fmt.Sprintf("%.0f", m.activeRace.Stats.WPM))))
+	}
+	blocks = append(blocks,
 		statBlock("acc", val.Render(fmt.Sprintf("%.0f%%", r.Accuracy))),
 		statBlock("raw", val.Render(fmt.Sprintf("%.0f", r.Raw))),
 		statBlock("typos", errStr),
 		statBlock("time", val.Render(timeStr)),
 	)
+	stats := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
 
 	var out []string
 	out = append(out, "", stats, "", "")
@@ -129,7 +143,6 @@ func (m model) viewResults(p theme.Palette) string {
 	} else if m.pb > 0 {
 		out = append(out, dim.Render(fmt.Sprintf("pb %.0f", m.pb)))
 	}
-
 	return lipgloss.JoinVertical(lipgloss.Center, out...)
 }
 

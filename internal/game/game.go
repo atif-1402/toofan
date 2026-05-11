@@ -15,36 +15,43 @@ type Stats struct {
 	Mistakes int // total wrong keystrokes, including corrected ones
 }
 
+type RacePoint struct {
+	MS  int `json:"ms"`
+	Len int `json:"len"`
+}
+
 type Game struct {
-	text      string
-	Snippet   lang.Snippet
-	input     string
-	errors    map[int]bool // unfixed errors — used for live display coloring
-	mistakeAt map[int]bool // every wrong keystroke ever — never cleared by backspace
-	started   bool
-	duration  int
-	CodeMode  bool // true = snippet-based typing, false = standard words
+	text       string
+	Snippet    lang.Snippet
+	input      string
+	errors     map[int]bool // unfixed errors — used for live display coloring
+	mistakeAt  map[int]bool // every wrong keystroke ever — never cleared by backspace
+	started    bool
+	duration   int
+	CodeMode   bool // true = snippet-based typing, false = standard words
 	difficulty string
 
 	elapsed   time.Duration
 	lastTyped time.Time
 	LastTick  time.Time
+	raceTrack []RacePoint
 }
 
 // Accessors for fields that TUI needs to read
-func (g *Game) Text() string         { return g.text }
-func (g *Game) Input() string        { return g.input }
-func (g *Game) Errors() map[int]bool { return g.errors }
-func (g *Game) Started() bool        { return g.started }
-func (g *Game) Duration() int        { return g.duration }
+func (g *Game) Text() string           { return g.text }
+func (g *Game) Input() string          { return g.input }
+func (g *Game) Errors() map[int]bool   { return g.errors }
+func (g *Game) Started() bool          { return g.started }
+func (g *Game) Duration() int          { return g.duration }
 func (g *Game) Elapsed() time.Duration { return g.elapsed }
-func (g *Game) SetText(s string)     { g.text = normalizeTabs(s) }
+func (g *Game) SetText(s string)       { g.text = normalizeTabs(s) }
+func (g *Game) RaceTrack() []RacePoint { return g.raceTrack }
 
 func New(duration int, mode string, language string, difficulty string) *Game {
 	g := &Game{
-		duration:  duration, // 0 means infinite mode (tied to length of snippet)
-		errors:    make(map[int]bool),
-		mistakeAt: make(map[int]bool),
+		duration:   duration, // 0 means infinite mode (tied to length of snippet)
+		errors:     make(map[int]bool),
+		mistakeAt:  make(map[int]bool),
 		difficulty: difficulty,
 	}
 
@@ -138,8 +145,8 @@ func (g *Game) TypeChar(ch rune) {
 			break
 		}
 	}
+	g.recordRacePoint()
 }
-
 
 func (g *Game) Backspace() {
 	if len(g.input) == 0 {
@@ -169,6 +176,7 @@ func (g *Game) Backspace() {
 		delete(g.errors, pos)
 		// mistakeAt is NOT cleared — tracks lifetime errors
 	}
+	g.recordRacePoint()
 }
 
 func (g *Game) TimeLeft() int {
@@ -289,4 +297,16 @@ func (g *Game) Reset(mode string, language string, difficulty string) {
 	g.elapsed = 0
 	g.lastTyped = time.Time{}
 	g.LastTick = time.Time{}
+	g.raceTrack = nil
+}
+
+func (g *Game) recordRacePoint() {
+	if !g.started {
+		return
+	}
+	ms := int(g.elapsed.Milliseconds())
+	g.raceTrack = append(g.raceTrack, RacePoint{
+		MS:  ms,
+		Len: len(g.input),
+	})
 }

@@ -2,6 +2,7 @@ package game
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,18 @@ import (
 )
 
 var dataDir string
+
+type RaceRecord struct {
+	ID         string      `json:"id"`
+	At         string      `json:"at"`
+	Duration   int         `json:"duration"`
+	Mode       string      `json:"mode"`
+	Language   string      `json:"language"`
+	Difficulty string      `json:"difficulty"`
+	Text       string      `json:"text"`
+	Stats      Stats       `json:"stats"`
+	Points     []RacePoint `json:"points"`
+}
 
 func init() {
 	configDir, _ := os.UserConfigDir()
@@ -100,6 +113,58 @@ func SavePB(duration int, mode string, wpm float64) {
 	}
 }
 
+func SaveRace(r RaceRecord) {
+	os.MkdirAll(dataDir, 0755)
+	path := filepath.Join(dataDir, "races.txt")
+
+	races := LoadRaces()
+	races = append(races, r)
+	if len(races) > 10 {
+		races = races[len(races)-10:]
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	for _, rec := range races {
+		b, err := json.Marshal(rec)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintln(f, string(b))
+	}
+}
+
+func LoadRaces() []RaceRecord {
+	path := filepath.Join(dataDir, "races.txt")
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	var out []RaceRecord
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var r RaceRecord
+		if err := json.Unmarshal([]byte(scanner.Text()), &r); err != nil {
+			continue
+		}
+		if r.Text == "" || len(r.Points) == 0 {
+			continue
+		}
+		out = append(out, r)
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+
 func LoadConfig() (duration int, mode string, language string, difficulty string, themeName string) {
 	duration, mode, language, difficulty, themeName = 30, "words", "go", "easy", "tokyonight"
 
@@ -176,7 +241,7 @@ func SaveBackup() (string, error) {
 	dest := filepath.Join(backupDir, fmt.Sprintf("toofan_backup_%s.txt", stamp))
 
 	var bundle strings.Builder
-	for _, name := range []string{"results.txt", "pb.txt", "config.txt"} {
+	for _, name := range []string{"results.txt", "pb.txt", "config.txt", "races.txt"} {
 		data, err := os.ReadFile(filepath.Join(dataDir, name))
 		if err != nil {
 			continue
