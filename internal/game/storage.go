@@ -146,7 +146,6 @@ func LoadRaces() []RaceRecord {
 		if err := json.Unmarshal([]byte(scanner.Text()), &r); err != nil {
 			continue
 		}
-		normalizeRaceRecord(&r)
 		if r.Text == "" || len(r.Points) == 0 {
 			continue
 		}
@@ -155,26 +154,6 @@ func LoadRaces() []RaceRecord {
 	return out
 }
 
-func normalizeRaceRecord(r *RaceRecord) {
-	if strings.HasPrefix(r.Mode, "code:") {
-		if r.Language == "" {
-			r.Language = strings.TrimPrefix(r.Mode, "code:")
-		}
-		r.Mode = "code"
-	}
-	if r.Mode == "" {
-		r.Mode = "words"
-	}
-	if r.Mode != "code" {
-		r.Mode = "words"
-	}
-	if r.Language == "" {
-		r.Language = "go"
-	}
-	if r.Difficulty == "" {
-		r.Difficulty = "easy"
-	}
-}
 
 func LoadConfig() (duration int, mode string, language string, difficulty string, themeName string) {
 	duration, mode, language, difficulty, themeName = 30, "words", "go", "easy", "tokyonight"

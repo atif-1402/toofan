@@ -62,7 +62,6 @@ type model struct {
 	raceCur     int
 	races       []game.RaceRecord
 	activeRace  *game.RaceRecord
-	raceDelta   game.Stats
 }
 
 func New() model {
@@ -124,13 +123,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						Stats:      m.result,
 						Points:     m.game.RaceTrack(),
 					})
-					m.raceDelta = game.Stats{}
-					if m.activeRace != nil {
-						m.raceDelta.WPM = m.result.WPM - m.activeRace.Stats.WPM
-						m.raceDelta.Accuracy = m.result.Accuracy - m.activeRace.Stats.Accuracy
-						m.raceDelta.Raw = m.result.Raw - m.activeRace.Stats.Raw
-						m.raceDelta.Mistakes = m.result.Mistakes - m.activeRace.Stats.Mistakes
-					}
+
 					if m.gotNewPB {
 						game.SavePB(m.duration, m.mode, m.result.WPM)
 					}

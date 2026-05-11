@@ -45,7 +45,7 @@ func (g *Game) Started() bool          { return g.started }
 func (g *Game) Duration() int          { return g.duration }
 func (g *Game) Elapsed() time.Duration { return g.elapsed }
 func (g *Game) SetText(s string)       { g.text = normalizeTabs(s) }
-func (g *Game) RaceTrack() []RacePoint { return append([]RacePoint(nil), g.raceTrack...) }
+func (g *Game) RaceTrack() []RacePoint { return g.raceTrack }
 
 func New(duration int, mode string, language string, difficulty string) *Game {
 	g := &Game{
@@ -300,25 +300,11 @@ func (g *Game) Reset(mode string, language string, difficulty string) {
 	g.raceTrack = nil
 }
 
-func (g *Game) elapsedAt(now time.Time) time.Duration {
-	if !g.started {
-		return 0
-	}
-	if g.LastTick.IsZero() || g.Finished() {
-		return g.elapsed
-	}
-	dt := now.Sub(g.LastTick)
-	if dt < 0 {
-		dt = 0
-	}
-	return g.elapsed + dt
-}
-
 func (g *Game) recordRacePoint() {
 	if !g.started {
 		return
 	}
-	ms := int(g.elapsedAt(time.Now()).Milliseconds())
+	ms := int(g.elapsed.Milliseconds())
 	g.raceTrack = append(g.raceTrack, RacePoint{
 		MS:  ms,
 		Len: len(g.input),
