@@ -9,7 +9,7 @@ _Practice with english words or real code snippets. No browser, no account, ever
 </p>
 <p align="center">
   <a href="https://terminaltrove.com/toofan/">
-    <img width="15%" alt="Terminal Trove logo" src="https://github.com/user-attachments/assets/f85b1470-a574-4bc2-b002-4e6dddb9e277" />
+    <img width="20%" alt="Terminal Trove logo" src="https://github.com/user-attachments/assets/f85b1470-a574-4bc2-b002-4e6dddb9e277" />
   </a>
 </p>
 <br>
