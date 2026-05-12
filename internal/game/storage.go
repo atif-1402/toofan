@@ -25,20 +25,34 @@ type RaceRecord struct {
 	Points     []RacePoint `json:"points"`
 }
 
+type ConfigRecord struct {
+	Duration   int                `json:"duration"`
+	Mode       string             `json:"mode"`
+	Lang       string             `json:"lang"`
+	Difficulty string             `json:"difficulty"`
+	Theme      string             `json:"theme"`
+	PB         map[string]float64 `json:"pb"`
+}
+
+type ResultRecord struct {
+	At   string  `json:"at"`
+	WPM  float64 `json:"wpm"`
+	Acc  float64 `json:"acc"`
+	Dur  int     `json:"dur"`
+	Mode string  `json:"mode"`
+	Raw  float64 `json:"raw"`
+	Err  int     `json:"err"`
+}
+
 func init() {
 	configDir, _ := os.UserConfigDir()
 	dataDir = filepath.Join(configDir, "toofan")
+	migrate()
 }
 
-// SaveResult appends a line to results.txt — human readable
-// format: 2026-04-01 22:18 |  85 wpm | 97.5% | 30s | words | tokyonight
 func SaveResult(s Stats, duration int, mode string, language string) {
 	os.MkdirAll(dataDir, 0755)
-
-	f, err := os.OpenFile(
-		filepath.Join(dataDir, "results.txt"),
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644,
-	)
+	f, err := os.OpenFile(filepath.Join(dataDir, "results.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
@@ -49,73 +63,42 @@ func SaveResult(s Stats, duration int, mode string, language string) {
 		label = "code:" + language
 	}
 
-	fmt.Fprintf(f, "%s | %3.0f wpm | %5.1f%% | %3ds | %s | %3.0f raw | %d err\n",
-		time.Now().Format("2006-01-02 15:04"),
-		s.WPM, s.Accuracy, duration, label, s.Raw, s.Mistakes,
-	)
-}
-
-func GetPB(duration int, mode string) float64 {
-	path := filepath.Join(dataDir, "pb.txt")
-	f, err := os.Open(path)
-	if err != nil {
-		return 0
+	rec := ResultRecord{
+		At:   time.Now().Format("2006-01-02 15:04"),
+		WPM:  s.WPM,
+		Acc:  s.Accuracy,
+		Dur:  duration,
+		Mode: label,
+		Raw:  s.Raw,
+		Err:  s.Mistakes,
 	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		parts := strings.SplitN(scanner.Text(), "=", 2)
-		if len(parts) == 2 {
-			key := parts[0]
-			val, _ := strconv.ParseFloat(parts[1], 64)
-
-			kp := strings.SplitN(key, "-", 2)
-			if len(kp) == 2 && kp[0] == mode {
-				dur, _ := strconv.Atoi(kp[1])
-				if dur == duration {
-					return val
-				}
-			}
-		}
-	}
-	return 0
-}
-
-func SavePB(duration int, mode string, wpm float64) {
-	os.MkdirAll(dataDir, 0755)
-	path := filepath.Join(dataDir, "pb.txt")
-
-	pbs := make(map[string]float64)
-	if f, err := os.Open(path); err == nil {
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			parts := strings.SplitN(scanner.Text(), "=", 2)
-			if len(parts) == 2 {
-				val, _ := strconv.ParseFloat(parts[1], 64)
-				pbs[parts[0]] = val
-			}
-		}
-		f.Close()
-	}
-
-	key := fmt.Sprintf("%s-%d", mode, duration)
-	pbs[key] = wpm
-
-	f, err := os.Create(path)
+	b, err := json.Marshal(rec)
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	fmt.Fprintln(f, string(b))
+}
 
-	for k, val := range pbs {
-		fmt.Fprintf(f, "%s=%.0f\n", k, val)
+func GetPB(duration int, mode string) float64 {
+	cfg, ok := loadConfigRecord()
+	if !ok || cfg.PB == nil {
+		return 0
 	}
+	return cfg.PB[fmt.Sprintf("%s-%d", mode, duration)]
+}
+
+func SavePB(duration int, mode string, wpm float64) {
+	cfg, _ := loadConfigRecord()
+	if cfg.PB == nil {
+		cfg.PB = make(map[string]float64)
+	}
+	cfg.PB[fmt.Sprintf("%s-%d", mode, duration)] = wpm
+	saveConfigRecord(cfg)
 }
 
 func SaveRace(r RaceRecord) {
 	os.MkdirAll(dataDir, 0755)
-	path := filepath.Join(dataDir, "races.txt")
+	path := filepath.Join(dataDir, "races.jsonl")
 
 	races := LoadRaces()
 	races = append(races, r)
@@ -139,7 +122,7 @@ func SaveRace(r RaceRecord) {
 }
 
 func LoadRaces() []RaceRecord {
-	path := filepath.Join(dataDir, "races.txt")
+	path := filepath.Join(dataDir, "races.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -164,49 +147,38 @@ func LoadRaces() []RaceRecord {
 	return out
 }
 
-
 func LoadConfig() (duration int, mode string, language string, difficulty string, themeName string) {
 	duration, mode, language, difficulty, themeName = 30, "words", "go", "easy", "tokyonight"
-
-	path := filepath.Join(dataDir, "config.txt")
-	f, err := os.Open(path)
-	if err != nil {
+	cfg, ok := loadConfigRecord()
+	if !ok {
 		return
 	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		parts := strings.SplitN(scanner.Text(), "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		switch parts[0] {
-		case "duration":
-			duration, _ = strconv.Atoi(parts[1])
-		case "mode":
-			mode = parts[1]
-		case "lang":
-			language = parts[1]
-		case "difficulty":
-			difficulty = parts[1]
-		case "theme":
-			themeName = parts[1]
-		}
+	if cfg.Duration > 0 {
+		duration = cfg.Duration
+	}
+	if cfg.Mode != "" {
+		mode = cfg.Mode
+	}
+	if cfg.Lang != "" {
+		language = cfg.Lang
+	}
+	if cfg.Difficulty != "" {
+		difficulty = cfg.Difficulty
+	}
+	if cfg.Theme != "" {
+		themeName = cfg.Theme
 	}
 	return
 }
 
 func SaveConfig(duration int, mode string, language string, difficulty string, themeName string) {
-	os.MkdirAll(dataDir, 0755)
-	f, err := os.Create(filepath.Join(dataDir, "config.txt"))
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	fmt.Fprintf(f, "duration=%d\nmode=%s\nlang=%s\ndifficulty=%s\ntheme=%s\n",
-		duration, mode, language, difficulty, themeName)
+	cfg, _ := loadConfigRecord()
+	cfg.Duration = duration
+	cfg.Mode = mode
+	cfg.Lang = language
+	cfg.Difficulty = difficulty
+	cfg.Theme = themeName
+	saveConfigRecord(cfg)
 }
 
 // SplitBundle parses a bundled backup file (sections marked with "### filename")
@@ -241,7 +213,7 @@ func SaveBackup() (string, error) {
 	dest := filepath.Join(backupDir, fmt.Sprintf("toofan_backup_%s.txt", stamp))
 
 	var bundle strings.Builder
-	for _, name := range []string{"results.txt", "pb.txt", "config.txt", "races.txt"} {
+	for _, name := range []string{"config.json", "results.jsonl", "races.jsonl"} {
 		data, err := os.ReadFile(filepath.Join(dataDir, name))
 		if err != nil {
 			continue
@@ -254,6 +226,199 @@ func SaveBackup() (string, error) {
 		return "", err
 	}
 	return dest, nil
+}
+
+func loadConfigRecord() (ConfigRecord, bool) {
+	cfg := ConfigRecord{
+		Duration:   30,
+		Mode:       "words",
+		Lang:       "go",
+		Difficulty: "easy",
+		Theme:      "tokyonight",
+		PB:         make(map[string]float64),
+	}
+	data, err := os.ReadFile(filepath.Join(dataDir, "config.json"))
+	if err != nil {
+		return cfg, false
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, false
+	}
+	if cfg.PB == nil {
+		cfg.PB = make(map[string]float64)
+	}
+	return cfg, true
+}
+
+func saveConfigRecord(cfg ConfigRecord) {
+	os.MkdirAll(dataDir, 0755)
+	if cfg.PB == nil {
+		cfg.PB = make(map[string]float64)
+	}
+	b, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(dataDir, "config.json"), b, 0644)
+}
+
+func migrate() {
+	_ = os.MkdirAll(dataDir, 0755)
+	migrateConfig()
+	migrateResults()
+	migrateRaces()
+}
+
+func migrateConfig() {
+	oldConfig := filepath.Join(dataDir, "config.txt")
+	newConfig := filepath.Join(dataDir, "config.json")
+	if !fileExists(oldConfig) || fileExists(newConfig) {
+		return
+	}
+
+	cfg := ConfigRecord{
+		Duration:   30,
+		Mode:       "words",
+		Lang:       "go",
+		Difficulty: "easy",
+		Theme:      "tokyonight",
+		PB:         make(map[string]float64),
+	}
+
+	if f, err := os.Open(oldConfig); err == nil {
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			parts := strings.SplitN(scanner.Text(), "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			switch parts[0] {
+			case "duration":
+				cfg.Duration, _ = strconv.Atoi(parts[1])
+			case "mode":
+				cfg.Mode = parts[1]
+			case "lang":
+				cfg.Lang = parts[1]
+			case "difficulty":
+				cfg.Difficulty = parts[1]
+			case "theme":
+				cfg.Theme = parts[1]
+			}
+		}
+		_ = f.Close()
+	}
+
+	oldPB := filepath.Join(dataDir, "pb.txt")
+	if f, err := os.Open(oldPB); err == nil {
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			parts := strings.SplitN(scanner.Text(), "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			val, err := strconv.ParseFloat(parts[1], 64)
+			if err != nil {
+				continue
+			}
+			cfg.PB[parts[0]] = val
+		}
+		_ = f.Close()
+	}
+
+	saveConfigRecord(cfg)
+	fmt.Printf("migrated config to %s\n", newConfig)
+}
+
+func migrateResults() {
+	oldResults := filepath.Join(dataDir, "results.txt")
+	newResults := filepath.Join(dataDir, "results.jsonl")
+	if !fileExists(oldResults) || fileExists(newResults) {
+		return
+	}
+
+	in, err := os.Open(oldResults)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+
+	out, err := os.Create(newResults)
+	if err != nil {
+		return
+	}
+	defer out.Close()
+
+	scanner := bufio.NewScanner(in)
+	for scanner.Scan() {
+		rec, ok := parseLegacyResultLine(scanner.Text())
+		if !ok {
+			continue
+		}
+		b, err := json.Marshal(rec)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintln(out, string(b))
+	}
+	fmt.Printf("migrated results to %s\n", newResults)
+}
+
+func migrateRaces() {
+	oldRaces := filepath.Join(dataDir, "races.txt")
+	newRaces := filepath.Join(dataDir, "races.jsonl")
+	if !fileExists(oldRaces) || fileExists(newRaces) {
+		return
+	}
+	if err := os.Rename(oldRaces, newRaces); err != nil {
+		return
+	}
+	fmt.Printf("migrated races to %s\n", newRaces)
+}
+
+func parseLegacyResultLine(line string) (ResultRecord, bool) {
+	parts := strings.Split(line, "|")
+	if len(parts) < 5 {
+		return ResultRecord{}, false
+	}
+
+	rec := ResultRecord{
+		At:   strings.TrimSpace(parts[0]),
+		Mode: strings.TrimSpace(parts[4]),
+	}
+	var err error
+
+	wpmStr := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(parts[1]), "wpm"))
+	rec.WPM, err = strconv.ParseFloat(wpmStr, 64)
+	if err != nil {
+		return ResultRecord{}, false
+	}
+
+	accStr := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(parts[2]), "%"))
+	rec.Acc, err = strconv.ParseFloat(accStr, 64)
+	if err != nil {
+		return ResultRecord{}, false
+	}
+
+	durStr := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(parts[3]), "s"))
+	rec.Dur, err = strconv.Atoi(durStr)
+	if err != nil {
+		return ResultRecord{}, false
+	}
+
+	if len(parts) >= 6 {
+		rawStr := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(parts[5]), "raw"))
+		rec.Raw, _ = strconv.ParseFloat(rawStr, 64)
+	}
+	if len(parts) >= 7 {
+		errStr := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(parts[6]), "err"))
+		rec.Err, _ = strconv.Atoi(errStr)
+	}
+	return rec, true
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func RestoreBackup(src string) error {
