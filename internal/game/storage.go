@@ -210,7 +210,7 @@ func SaveBackup() (string, error) {
 	os.MkdirAll(backupDir, 0755)
 
 	stamp := time.Now().Format("2006-01-02_15-04")
-	dest := filepath.Join(backupDir, fmt.Sprintf("toofan_backup_%s.txt", stamp))
+	dest := filepath.Join(backupDir, fmt.Sprintf("toofan_backup_%s.bak", stamp))
 
 	var bundle strings.Builder
 	for _, name := range []string{"config.json", "results.jsonl", "races.jsonl"} {
@@ -267,112 +267,199 @@ func migrate() {
 	migrateConfig()
 	migrateResults()
 	migrateRaces()
+	migrateBackups()
 }
 
 func migrateConfig() {
 	oldConfig := filepath.Join(dataDir, "config.txt")
+	oldPB := filepath.Join(dataDir, "pb.txt")
 	newConfig := filepath.Join(dataDir, "config.json")
-	if !fileExists(oldConfig) || fileExists(newConfig) {
+
+	if !fileExists(oldConfig) && !fileExists(oldPB) {
 		return
 	}
 
-	cfg := ConfigRecord{
-		Duration:   30,
-		Mode:       "words",
-		Lang:       "go",
-		Difficulty: "easy",
-		Theme:      "tokyonight",
-		PB:         make(map[string]float64),
-	}
-
-	if f, err := os.Open(oldConfig); err == nil {
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			parts := strings.SplitN(scanner.Text(), "=", 2)
-			if len(parts) != 2 {
-				continue
-			}
-			switch parts[0] {
-			case "duration":
-				cfg.Duration, _ = strconv.Atoi(parts[1])
-			case "mode":
-				cfg.Mode = parts[1]
-			case "lang":
-				cfg.Lang = parts[1]
-			case "difficulty":
-				cfg.Difficulty = parts[1]
-			case "theme":
-				cfg.Theme = parts[1]
-			}
+	if !fileExists(newConfig) {
+		cfg := ConfigRecord{
+			Duration:   30,
+			Mode:       "words",
+			Lang:       "go",
+			Difficulty: "easy",
+			Theme:      "tokyonight",
+			PB:         make(map[string]float64),
 		}
-		_ = f.Close()
-	}
 
-	oldPB := filepath.Join(dataDir, "pb.txt")
-	if f, err := os.Open(oldPB); err == nil {
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			parts := strings.SplitN(scanner.Text(), "=", 2)
-			if len(parts) != 2 {
-				continue
+		if f, err := os.Open(oldConfig); err == nil {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				parts := strings.SplitN(scanner.Text(), "=", 2)
+				if len(parts) != 2 {
+					continue
+				}
+				switch parts[0] {
+				case "duration":
+					cfg.Duration, _ = strconv.Atoi(parts[1])
+				case "mode":
+					cfg.Mode = parts[1]
+				case "lang":
+					cfg.Lang = parts[1]
+				case "difficulty":
+					cfg.Difficulty = parts[1]
+				case "theme":
+					cfg.Theme = parts[1]
+				}
 			}
-			val, err := strconv.ParseFloat(parts[1], 64)
-			if err != nil {
-				continue
-			}
-			cfg.PB[parts[0]] = val
+			_ = f.Close()
 		}
-		_ = f.Close()
+
+		if f, err := os.Open(oldPB); err == nil {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				parts := strings.SplitN(scanner.Text(), "=", 2)
+				if len(parts) != 2 {
+					continue
+				}
+				val, err := strconv.ParseFloat(parts[1], 64)
+				if err != nil {
+					continue
+				}
+				cfg.PB[parts[0]] = val
+			}
+			_ = f.Close()
+		}
+
+		saveConfigRecord(cfg)
+		if !fileExists(newConfig) {
+			return
+		}
+		fmt.Printf("migrated config to %s\n", newConfig)
 	}
 
-	saveConfigRecord(cfg)
-	fmt.Printf("migrated config to %s\n", newConfig)
+	_ = os.Remove(oldConfig)
+	_ = os.Remove(oldPB)
 }
 
 func migrateResults() {
 	oldResults := filepath.Join(dataDir, "results.txt")
 	newResults := filepath.Join(dataDir, "results.jsonl")
-	if !fileExists(oldResults) || fileExists(newResults) {
+
+	if !fileExists(oldResults) {
 		return
 	}
 
-	in, err := os.Open(oldResults)
-	if err != nil {
-		return
-	}
-	defer in.Close()
-
-	out, err := os.Create(newResults)
-	if err != nil {
-		return
-	}
-	defer out.Close()
-
-	scanner := bufio.NewScanner(in)
-	for scanner.Scan() {
-		rec, ok := parseLegacyResultLine(scanner.Text())
-		if !ok {
-			continue
-		}
-		b, err := json.Marshal(rec)
+	if !fileExists(newResults) {
+		in, err := os.Open(oldResults)
 		if err != nil {
-			continue
+			return
 		}
-		fmt.Fprintln(out, string(b))
+
+		out, err := os.Create(newResults)
+		if err != nil {
+			in.Close()
+			return
+		}
+
+		scanner := bufio.NewScanner(in)
+		for scanner.Scan() {
+			rec, ok := parseLegacyResultLine(scanner.Text())
+			if !ok {
+				continue
+			}
+			b, err := json.Marshal(rec)
+			if err != nil {
+				continue
+			}
+			fmt.Fprintln(out, string(b))
+		}
+		in.Close()
+		out.Close()
+
+		if !fileExists(newResults) {
+			return
+		}
+		fmt.Printf("migrated results to %s\n", newResults)
 	}
-	fmt.Printf("migrated results to %s\n", newResults)
+
+	_ = os.Remove(oldResults)
 }
 
 func migrateRaces() {
 	oldRaces := filepath.Join(dataDir, "races.txt")
 	newRaces := filepath.Join(dataDir, "races.jsonl")
-	if !fileExists(oldRaces) || fileExists(newRaces) {
+
+	if !fileExists(oldRaces) {
 		return
 	}
-	if err := os.Rename(oldRaces, newRaces); err != nil {
-		return
+
+	if !fileExists(newRaces) {
+		data, err := os.ReadFile(oldRaces)
+		if err != nil {
+			return
+		}
+		if err := os.WriteFile(newRaces, data, 0644); err != nil {
+			return
+		}
+		fmt.Printf("migrated races to %s\n", newRaces)
 	}
-	fmt.Printf("migrated races to %s\n", newRaces)
+
+	_ = os.Remove(oldRaces)
+}
+
+func migrateBackups() {
+	backupDir := filepath.Join(dataDir, "backups")
+
+	txt, _ := filepath.Glob(filepath.Join(backupDir, "toofan_backup_*.txt"))
+	for _, src := range txt {
+		dest := strings.TrimSuffix(src, ".txt") + ".bak"
+		if !fileExists(dest) {
+			_ = os.Rename(src, dest)
+		} else {
+			_ = os.Remove(src)
+		}
+	}
+
+	jsonl, _ := filepath.Glob(filepath.Join(backupDir, "toofan_backup_*.jsonl"))
+	for _, src := range jsonl {
+		raw, err := os.ReadFile(src)
+		if err != nil {
+			continue
+		}
+		dest := strings.TrimSuffix(src, ".jsonl") + ".bak"
+		if fileExists(dest) {
+			_ = os.Remove(src)
+			continue
+		}
+
+		content := string(raw)
+		if strings.HasPrefix(strings.TrimSpace(content), "{") {
+			var bundle strings.Builder
+			for _, line := range strings.Split(content, "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				var entry struct {
+					File string `json:"file"`
+					Data string `json:"data"`
+				}
+				if json.Unmarshal([]byte(line), &entry) != nil {
+					continue
+				}
+				bundle.WriteString("### " + entry.File + "\n")
+				bundle.WriteString(entry.Data)
+				if !strings.HasSuffix(entry.Data, "\n") {
+					bundle.WriteString("\n")
+				}
+			}
+			_ = os.WriteFile(dest, []byte(bundle.String()), 0644)
+		} else {
+			_ = os.WriteFile(dest, raw, 0644)
+		}
+
+		if fileExists(dest) {
+			_ = os.Remove(src)
+		}
+	}
 }
 
 func parseLegacyResultLine(line string) (ResultRecord, bool) {
@@ -427,14 +514,14 @@ func RestoreBackup(src string) error {
 		return err
 	}
 	for name, data := range SplitBundle(string(raw)) {
-		os.WriteFile(filepath.Join(dataDir, name), []byte(data), 0644)
+		_ = os.WriteFile(filepath.Join(dataDir, name), []byte(data), 0644)
 	}
 	return nil
 }
 
 func ListBackups() ([]string, string) {
 	backupDir := filepath.Join(dataDir, "backups")
-	files, _ := filepath.Glob(filepath.Join(backupDir, "toofan_backup_*.txt"))
+	files, _ := filepath.Glob(filepath.Join(backupDir, "toofan_backup_*.bak"))
 	for i, j := 0, len(files)-1; i < j; i, j = i+1, j-1 {
 		files[i], files[j] = files[j], files[i]
 	}

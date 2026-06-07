@@ -121,7 +121,7 @@ Results are stored in `~/.config/toofan/results.jsonl` (JSON Lines, one test per
 
 Races are stored in `~/.config/toofan/races.jsonl` (JSON Lines, capped at the latest 10 records).
 
-On first run after this format change, old `config.txt`/`pb.txt`/`results.txt`/`races.txt` files are auto-migrated if new files do not exist. Old files are not deleted automatically.
+On first run after this format change, old `config.txt`/`pb.txt`/`results.txt`/`races.txt` files are auto-migrated to the new format and removed after successful conversion.
 
 ## Do Not
 
