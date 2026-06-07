@@ -4,6 +4,7 @@
 
 **A minimal, lightning-fast typing TUI**  
 _Practice with english words or real code snippets. No browser, no account, everything stays local._
+
 <p align="center">
   <i>Featured on</i>
 </p>
@@ -163,6 +164,8 @@ _(If you built it from source and moved it globally, run `sudo rm /usr/local/bin
 
 Yes. Everything runs locally and is embedded in the binary. No internet needed.
 
+But there’s currently a pending [PR-50](https://github.com/vyrx-dev/toofan/pull/50) for `toofan-online`, which will add multiplayer support. It’s going to be a separate package from the main branch so the original offline experience stays exactly as promised.
+
 </details>
 
 <details>
@@ -176,10 +179,10 @@ We're always looking to add more. If your favorite programming language isn't su
 
 - [x] Curl script installation (macOS & Linux)
 - [x] Proper documentation for AI and contributors
-- [ ] More language support (python, rust, c, typescript, etc.)
+- [ ] More language support
 - [x] Difficulty levels for english words
 - [ ] AUR, Homebrew, Nix packages
-- [ ] Fix top pane alignment to match bottom panes in profile
+- [x] Fix top pane alignment to match bottom panes in profile
 
 ## Contributing
 
@@ -204,5 +207,3 @@ If you're using an AI coding assistant, read [`AGENTS.md`](AGENTS.md) first.
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=vyrx-dev/toofan&type=date&legend=top-left" />
  </picture>
 </a>
-
-
