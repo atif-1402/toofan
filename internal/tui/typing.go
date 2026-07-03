@@ -53,6 +53,8 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
 			m.save()
+		} else {
+			m.game.BackspaceWord() //added ctrl + w to delete a whole word only when typing begins
 		}
 
 	case "ctrl+l":
@@ -67,6 +69,14 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		//this is for termux since it reads ctrl + backspace as ctrl + h
+	case "ctrl+h":
+			if m.game.Started() {
+					m.game.BackspaceWord()
+			} else {
+					m.showHelp = true
+					return m, nil
+			}
 	case "ctrl+o":
 		if m.mode == "code" && !m.game.Started() {
 			m.activeRace = nil
@@ -83,11 +93,7 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case "ctrl+h":
-		if !m.game.Started() {
-			m.showHelp = true
-			return m, nil
-		}
+
 
 	case "?":
 		if !m.game.Started() {
