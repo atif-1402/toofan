@@ -178,6 +178,7 @@ func (g *Game) Backspace() {
 	}
 	g.recordRacePoint()
 }
+
 func (g *Game) BackspaceWord() {
 	if len(g.input) == 0 {
 		return
@@ -192,7 +193,7 @@ func (g *Game) BackspaceWord() {
 		delete(g.errors, pos)
 	}
 
-	// Then delete until hitting  a space or the beginning
+	// Then delete until hitting a space or the beginning
 	for len(g.input) > 0 && g.input[len(g.input)-1] != ' ' {
 		pos := len(g.input) - 1
 		g.input = g.input[:pos]
@@ -201,6 +202,7 @@ func (g *Game) BackspaceWord() {
 
 	g.recordRacePoint()
 }
+
 func (g *Game) TimeLeft() int {
 	if !g.started {
 		return g.duration
