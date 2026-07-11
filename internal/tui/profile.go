@@ -344,15 +344,55 @@ func (m model) viewProfile(p theme.Palette) string {
 	}
 
 	var histRows []string
+
+	contentW := wideBoxWidth - 4
+	if contentW < 50 {
+		contentW = 50
+	}
+
+	type colDef struct {
+		ratio float64
+		min   int
+	}
+	cols := []colDef{
+		{9, 6},   // wpm
+		{9, 6},   // raw
+		{16, 10}, // accuracy
+		{11, 7},  // typos
+		{11, 7},  // mode
+		{16, 10}, // language
+		{10, 6},  // time
+		{18, 12}, // date
+	}
+
+	totalRatio := 0.0
+	for _, c := range cols {
+		totalRatio += c.ratio
+	}
+	widths := make([]int, len(cols))
+	remaining := contentW
+	for i, c := range cols {
+		w := int(float64(contentW) * c.ratio / totalRatio)
+		if w < c.min {
+			w = c.min
+		}
+		widths[i] = w
+		remaining -= w
+	}
+	for i := 0; remaining > 0; i = (i + 1) % len(cols) {
+		widths[i]++
+		remaining--
+	}
+
 	header := lipgloss.JoinHorizontal(lipgloss.Left,
-		col(7, hi.Render("wpm")),
-		col(7, hi.Render("raw")),
-		col(12, hi.Render("accuracy")),
-		col(9, hi.Render("typos")),
-		col(9, hi.Render("mode")),
-		col(12, hi.Render("language")),
-		col(8, hi.Render("time")),
-		col(16, hi.Render("date")),
+		col(widths[0], hi.Render("wpm")),
+		col(widths[1], hi.Render("raw")),
+		col(widths[2], hi.Render("accuracy")),
+		col(widths[3], hi.Render("typos")),
+		col(widths[4], hi.Render("mode")),
+		col(widths[5], hi.Render("language")),
+		col(widths[6], hi.Render("time")),
+		col(widths[7], hi.Render("date")),
 	)
 	histRows = append(histRows, header, "")
 
@@ -378,14 +418,14 @@ func (m model) viewProfile(p theme.Palette) string {
 		}
 
 		row := lipgloss.JoinHorizontal(lipgloss.Left,
-			col(7, val.Render(fmt.Sprintf("%.0f", e.WPM))),
-			col(7, dim.Render(fmt.Sprintf("%.0f", e.Raw))),
-			col(12, dim.Render(fmt.Sprintf("%.0f%%", e.Acc))),
-			col(9, dim.Render(fmt.Sprintf("%d", e.Errors))),
-			col(9, dim.Render(modeType)),
-			col(12, dim.Render(modeLang)),
-			col(8, dim.Render(durStr)),
-			col(16, dim.Render(dstr)),
+			col(widths[0], val.Render(fmt.Sprintf("%.0f", e.WPM))),
+			col(widths[1], dim.Render(fmt.Sprintf("%.0f", e.Raw))),
+			col(widths[2], dim.Render(fmt.Sprintf("%.0f%%", e.Acc))),
+			col(widths[3], dim.Render(fmt.Sprintf("%d", e.Errors))),
+			col(widths[4], dim.Render(modeType)),
+			col(widths[5], dim.Render(modeLang)),
+			col(widths[6], dim.Render(durStr)),
+			col(widths[7], dim.Render(dstr)),
 		)
 		histRows = append(histRows, row)
 	}
@@ -426,7 +466,7 @@ func heatGrid(activity map[string]int, p theme.Palette, width int) string {
 	c1 := lipgloss.NewStyle().Foreground(p.Accent)
 	dim := lipgloss.NewStyle().Foreground(p.Foreground)
 
-	weeks := (width - 11) / 2
+	weeks := (width - 9) / 2
 	if weeks < 1 {
 		weeks = 1
 	}
@@ -451,14 +491,14 @@ func heatGrid(activity map[string]int, p theme.Palette, width int) string {
 
 			// Don't mark future dates as active
 			if d.After(now) {
-				row.WriteString(c0.Render("■") + " ")
+				row.WriteString(c0.Render("󱓻") + " ")
 				continue
 			}
 
 			if activity[d.Format("2006-01-02")] > 0 {
-				row.WriteString(c1.Render("■") + " ")
+				row.WriteString(c1.Render("󱓻") + " ")
 			} else {
-				row.WriteString(c0.Render("■") + " ")
+				row.WriteString(c0.Render("󱓻") + " ")
 			}
 		}
 		rows = append(rows, row.String())
