@@ -491,14 +491,14 @@ func heatGrid(activity map[string]int, p theme.Palette, width int) string {
 
 			// Don't mark future dates as active
 			if d.After(now) {
-				row.WriteString(c0.Render("󱓻") + " ")
+				row.WriteString(c0.Render("■") + " ")
 				continue
 			}
 
 			if activity[d.Format("2006-01-02")] > 0 {
-				row.WriteString(c1.Render("󱓻") + " ")
+				row.WriteString(c1.Render("■") + " ")
 			} else {
-				row.WriteString(c0.Render("󱓻") + " ")
+				row.WriteString(c0.Render("■") + " ")
 			}
 		}
 		rows = append(rows, row.String())
