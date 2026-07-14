@@ -53,6 +53,8 @@ func (m model) handleTyping(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.game = game.New(m.duration, m.mode, m.lang, m.difficulty)
 			m.save()
+		} else {
+			m.game.BackspaceWord()
 		}
 
 	case "ctrl+l":
